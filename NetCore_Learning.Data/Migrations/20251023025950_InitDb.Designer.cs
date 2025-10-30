@@ -12,8 +12,8 @@ using NetCore_Learning.Data.Configuration;
 namespace NetCore_Learning.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251014151604_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20251023025950_InitDb")]
+    partial class InitDb
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -27,9 +27,11 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.Category", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
@@ -42,6 +44,9 @@ namespace NetCore_Learning.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Slug")
@@ -52,12 +57,12 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.Comment", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("AuthorId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -66,11 +71,15 @@ namespace NetCore_Learning.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("ParentId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("ParentId")
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("PostId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -85,15 +94,16 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.Post", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("AuthorId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<Guid>("CategoryId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("CategoryId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -119,6 +129,9 @@ namespace NetCore_Learning.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AuthorId");
@@ -133,11 +146,11 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.PostTag", b =>
                 {
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("PostId")
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<Guid>("TagId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("TagId")
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("PostId", "TagId");
 
@@ -148,9 +161,11 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.Role", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
@@ -159,6 +174,9 @@ namespace NetCore_Learning.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.ToTable("Roles");
@@ -166,9 +184,11 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.Tag", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -177,6 +197,9 @@ namespace NetCore_Learning.Data.Migrations
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
@@ -188,19 +211,14 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.User", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Bio")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
@@ -213,21 +231,18 @@ namespace NetCore_Learning.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("PhoneNumber")
+                    b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("UrlAvatar")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
 
                     b.HasIndex("RoleId");
 
@@ -236,14 +251,25 @@ namespace NetCore_Learning.Data.Migrations
 
             modelBuilder.Entity("NetCore_Learning.Data.Models.UserAccount", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<int>("IsActive")
-                        .HasColumnType("int");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("IsActive")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -251,19 +277,19 @@ namespace NetCore_Learning.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("Username")
+                    b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId")
+                    b.HasIndex("Email")
                         .IsUnique();
 
-                    b.HasIndex("Username")
+                    b.HasIndex("UserId")
                         .IsUnique();
 
                     b.ToTable("UserAccounts");

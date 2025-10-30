@@ -28,7 +28,7 @@ namespace Net_Learning.Controllers
 
         [HttpPost("login")]
         [AllowAnonymous]
-        public async Task<ResponseResult<AccountDto>> Login(AccountDto account)
+        public async Task<ResponseResult<string>> Login(AccountDto account)
         {
             try
             {
@@ -37,7 +37,7 @@ namespace Net_Learning.Controllers
             }
             catch (Exception ex)
             {
-                return new InvalidDataResponseResult<AccountDto>(ex.Message);
+                return new InvalidDataResponseResult<string>(ex.Message);
             }
 
         }

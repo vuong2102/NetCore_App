@@ -114,3 +114,4 @@ namespace NetCore_Learning.Data.Configuration
         }
     }
 }
+

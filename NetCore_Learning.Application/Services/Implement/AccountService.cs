@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+﻿using MapsterMapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,25 +22,52 @@ namespace NetCore_Learning.Application.Services.Implement
         readonly ApplicationDbContext  _context;
         public AccountService(ApplicationDbContext context,
             IUnitOfWork unitOfWork,
+            IMapper mapper,
             IUserAccountRepository userAccountRepository) 
         {
             _context = context;
+            _mapper = mapper;
             _unitOfWork = unitOfWork;
             _userAccountRepository = userAccountRepository;
         }
 
-        public async Task<ResponseResult<AccountDto>> LoginRequestAsync(AccountDto account)
+        public async Task<ResponseResult<string>> LoginRequestAsync(AccountDto account)
         {
-            await Task.Delay(100);
-            string token = "";
-            if (account.Email == "admin" && account.Password == "1")
+            try
             {
-                return new ResponseResult<AccountDto>(null, ResultCode.SuccessResult);
+                // Lấy tài khoản theo Email
+                var userAccount = await _context.UserAccounts
+                    .Include(x => x.User)
+                    .ThenInclude(u => u.Role)
+                    .FirstOrDefaultAsync(x => x.Email == account.Email);
+
+                if (userAccount == null)
+                    throw new UnauthorizedAccessException("Email không tồn tại");
+
+                // Kiểm tra trạng thái tài khoản
+                if (userAccount.IsActive != ActiveStatusEnum.Active.ToString())
+                    throw new UnauthorizedAccessException("Tài khoản đã bị khóa hoặc chưa kích hoạt");
+
+                // Kiểm tra mật khẩu
+                var passwordHasher = new PasswordHasher<UserAccount>();
+                var result = passwordHasher.VerifyHashedPassword(userAccount, userAccount.PasswordHash, account.Password);
+
+                if (result == PasswordVerificationResult.Failed)
+                    throw new UnauthorizedAccessException("Mật khẩu không chính xác");
+
+                // Tạo JWT token hoặc token tạm (demo)
+                string token = Guid.NewGuid().ToString(); // bạn có thể thay bằng token JWT thực tế
+
+                return new ResponseResult<string>(token, ResultCode.SuccessResult);
             }
-            else
+            catch (UnauthorizedAccessException ex)
             {
-                // Throw UnauthorizedAccessException để GlobalExceptionHandler có thể xử lý
-                throw new UnauthorizedAccessException("Tên đăng nhập hoặc mật khẩu không đúng");
+                // Ném lại để GlobalExceptionHandler xử lý
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return new ResponseResult<string>($"Login failed: {ex.Message}", ResultCode.ExceptionResult);
             }
         }
 
@@ -49,10 +76,13 @@ namespace NetCore_Learning.Application.Services.Implement
             try
             {
                 await _unitOfWork.BeginTransactionAsync();
+
+                //Register new account
                 var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == RoleEnum.NormalUser.ToString());
                 User user = new User
                 {
                     Id = Guid.NewGuid().ToString(),
+                    RoleId = role?.Id,
                     IsActive = 1
                 };
 

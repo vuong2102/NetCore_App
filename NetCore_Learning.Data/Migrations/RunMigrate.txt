@@ -1,1 +1,14 @@
-﻿1. Update table
+﻿1. Create tables
+- dotnet ef migrations add InitDb --project NetCore_Learning.Data --startup-project NetCore_Learning.API
+
+2. Update database
+- tạo lệnh update: 
+	+ dotnet ef migrations add UpdateModel_v1 --project NetCore_Learning.Data --startup-project NetCore_Learning.API
+- run lệnh update:
+	+ dotnet ef database update --project NetCore_Learning.Data --startup-project NetCore_Learning.API
+
+3. Remove last migration
+- dotnet ef migrations remove --project NetCore_Learning.Data --startup-project NetCore_Learning.API
+
+4. List migrations
+- dotnet ef migrations list --project NetCore_Learning.Data --startup-project NetCore_Learning.API

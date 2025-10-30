@@ -1,10 +1,12 @@
+using Mapster;
+using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using NetCore_Learning.API.Exception;
 using NetCore_Learning.API.Helper.ServiceExtensions;
+using NetCore_Learning.Application.Mappings;
 using NetCore_Learning.Application.Services.Implement;
 using NetCore_Learning.Application.Services.Interface;
 using NetCore_Learning.Data.Configuration;
@@ -56,6 +58,11 @@ builder.Services.AddApiVersioningService();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 
+// Add Mapster DI
+RegisterMapsterConfig.RegisterMappings();
+builder.Services.AddSingleton(TypeAdapterConfig.GlobalSettings);
+builder.Services.AddScoped<IMapper, ServiceMapper>();
+
 var app = builder.Build();
 app.UseExceptionHandler();
 
@@ -65,7 +72,6 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-
     app.MapScalarApiReference(options =>
     {
         options.Title = "Hivuong API";
