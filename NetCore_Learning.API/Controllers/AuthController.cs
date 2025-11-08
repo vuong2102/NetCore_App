@@ -28,7 +28,7 @@ namespace Net_Learning.Controllers
 
         [HttpPost("login")]
         [AllowAnonymous]
-        public async Task<ResponseResult<string>> Login(AccountDto account)
+        public async Task<ResponseResult<TokenResponseDto>> Login(AccountDto account)
         {
             try
             {
@@ -37,9 +37,26 @@ namespace Net_Learning.Controllers
             }
             catch (Exception ex)
             {
-                return new InvalidDataResponseResult<string>(ex.Message);
+                return new InvalidDataResponseResult<TokenResponseDto>(ex.Message);
             }
+        }
 
+        [HttpPost("refresh-token")]
+        public async Task<ResponseResult<TokenResponseDto>> RefreshToken(TokenRequestDto request)
+        {
+            try
+            {
+                var result = await _accountService.RefreshTokenAsync(request);
+                if (result == null)
+                {
+                    return new InvalidDataResponseResult<TokenResponseDto>("Invalid refresh token or user ID.");
+                }
+                return result;
+            }
+            catch (Exception ex)
+            {
+                return new InvalidDataResponseResult<TokenResponseDto>(ex.Message);
+            }
         }
 
         [HttpPost("register")]
@@ -57,8 +74,6 @@ namespace Net_Learning.Controllers
             }
 
         }
-
-
 
         [HttpGet("LifeTime-of-dependency_injection")]
         public IActionResult LifeTimeOfDependencyInjection()

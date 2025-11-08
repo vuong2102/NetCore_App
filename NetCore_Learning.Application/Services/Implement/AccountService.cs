@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using NetCore_Learning.Application.Models.DTO;
 using NetCore_Learning.Application.Services.Interface;
 using NetCore_Learning.Data.Configuration;
@@ -11,31 +12,27 @@ using NetCore_Learning.Data.Core.YourApp.Core.Interfaces;
 using NetCore_Learning.Data.Models;
 using NetCore_Learning.Data.Repositories.Interface;
 using NetCore_Learning.Share.Common;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
 
 namespace NetCore_Learning.Application.Services.Implement
 {
-    public class AccountService : IAccountService
+    public class AccountService(
+        ApplicationDbContext context,
+        IMapper _mapper,
+        IUnitOfWork _unitOfWork,
+        IConfiguration _configuration,
+        IUserAccountRepository _userAccountRepository
+        ) : IAccountService
     {
-        readonly IMapper _mapper;
-        readonly IUnitOfWork _unitOfWork;
-        readonly IUserAccountRepository _userAccountRepository;
-        readonly ApplicationDbContext  _context;
-        public AccountService(ApplicationDbContext context,
-            IUnitOfWork unitOfWork,
-            IMapper mapper,
-            IUserAccountRepository userAccountRepository) 
-        {
-            _context = context;
-            _mapper = mapper;
-            _unitOfWork = unitOfWork;
-            _userAccountRepository = userAccountRepository;
-        }
+        readonly ApplicationDbContext  _context = context;
 
-        public async Task<ResponseResult<string>> LoginRequestAsync(AccountDto account)
+        public async Task<ResponseResult<TokenResponseDto>> LoginRequestAsync(AccountDto account)
         {
             try
             {
-                // Lấy tài khoản theo Email
+                // Get user by email
                 var userAccount = await _context.UserAccounts
                     .Include(x => x.User)
                     .ThenInclude(u => u.Role)
@@ -44,21 +41,20 @@ namespace NetCore_Learning.Application.Services.Implement
                 if (userAccount == null)
                     throw new UnauthorizedAccessException("Email không tồn tại");
 
-                // Kiểm tra trạng thái tài khoản
+                // Check if account is active
                 if (userAccount.IsActive != ActiveStatusEnum.Active.ToString())
                     throw new UnauthorizedAccessException("Tài khoản đã bị khóa hoặc chưa kích hoạt");
 
-                // Kiểm tra mật khẩu
+                // Verify password
                 var passwordHasher = new PasswordHasher<UserAccount>();
                 var result = passwordHasher.VerifyHashedPassword(userAccount, userAccount.PasswordHash, account.Password);
 
                 if (result == PasswordVerificationResult.Failed)
                     throw new UnauthorizedAccessException("Mật khẩu không chính xác");
 
-                // Tạo JWT token hoặc token tạm (demo)
-                string token = Guid.NewGuid().ToString(); // bạn có thể thay bằng token JWT thực tế
-
-                return new ResponseResult<string>(token, ResultCode.SuccessResult);
+                // Create token response
+                var tokenResponse = await CreateTokenResponseAsync(userAccount);
+                return new ResponseResult<TokenResponseDto>(tokenResponse, ResultCode.SuccessResult);
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -67,8 +63,96 @@ namespace NetCore_Learning.Application.Services.Implement
             }
             catch (Exception ex)
             {
-                return new ResponseResult<string>($"Login failed: {ex.Message}", ResultCode.ExceptionResult);
+                return new ResponseResult<TokenResponseDto>(null, ResultCode.ExceptionResult, $"Login failed: {ex.Message}!!!");
             }
+        }
+
+        private string CreateJwtToken(UserAccount userAccount)
+        {
+            //Payload
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, userAccount.UserId),
+                new Claim(ClaimTypes.Email, userAccount.Email),
+                new Claim(ClaimTypes.Role, userAccount.Role)
+            };
+
+            //Signature
+            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(_configuration["JWT:SecretKey"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512); //Header
+
+            var tokenDescriptor = new JwtSecurityToken(
+                issuer: _configuration["JWT:ValidIssuer"],
+                audience: _configuration["JWT:ValidAudience"],
+                claims: claims,
+                expires: DateTime.Now.AddHours(2),
+                signingCredentials: creds
+                );
+            return new JwtSecurityTokenHandler().WriteToken(tokenDescriptor);
+        }
+
+        private static string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[32];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
+        }
+
+        private async Task<string> GenerateAndSaveRefreshTokenAsync(UserAccount userAccount)
+        {
+            var refreshToken = GenerateRefreshToken();
+            userAccount.RefreshToken = refreshToken;
+            userAccount.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            await _context.SaveChangesAsync();
+            return refreshToken;
+        }
+
+        public async Task<ResponseResult<TokenResponseDto>> RefreshTokenAsync(TokenRequestDto tokenRequest)
+        {
+            try
+            {
+                var user = await ValidateRefreshTokenAsync(tokenRequest.UserId, tokenRequest.RefreshToken);
+                if (user == null)
+                {
+                    return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "Invalid refresh token or user ID");
+                }
+                var userAccount = await _context.UserAccounts.FirstOrDefaultAsync(ua => ua.UserId == user.Id);
+                if (userAccount == null)
+                {
+                    return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "User account not found");
+                }
+                var tokenResponse = await CreateTokenResponseAsync(userAccount);
+                return new ResponseResult<TokenResponseDto>(tokenResponse, ResultCode.SuccessResult);
+            }
+            catch (Exception ex)
+            {
+                return new ResponseResult<TokenResponseDto>(null, ResultCode.ExceptionResult, $"Refresh token failed: {ex.Message}");
+            }
+        }
+
+        public async Task<TokenResponseDto> CreateTokenResponseAsync(UserAccount userAccount)
+        {
+            var newAccessToken = CreateJwtToken(userAccount);
+            var newRefreshToken = await GenerateAndSaveRefreshTokenAsync(userAccount);
+            var response = new TokenResponseDto
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken
+            };
+            return response;
+        }
+
+        private async Task<User?> ValidateRefreshTokenAsync(string userId, string refreshToken)
+        {
+            var userAccount = await _context.UserAccounts
+                .Include(ua => ua.User)
+                .FirstOrDefaultAsync(ua => ua.UserId == userId && ua.RefreshToken == refreshToken);
+            if (userAccount == null || userAccount.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            {
+                return null;
+            }
+            return userAccount.User;
         }
 
         public async Task<ResponseResult<string>> RegisterAccountAsync(AccountDto account)

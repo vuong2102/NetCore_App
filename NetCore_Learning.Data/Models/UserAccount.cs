@@ -14,6 +14,8 @@ namespace NetCore_Learning.Data.Models
         public required string Role { get; set; }
         public required string UserId { get; set; }
         public required User User { get; set; }
+        public string? RefreshToken { get; set; }
+        public DateTime? RefreshTokenExpiryTime { get; set; }
         public required string IsActive { get; set; }
     }
 }

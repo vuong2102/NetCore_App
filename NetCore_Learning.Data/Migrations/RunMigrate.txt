@@ -3,7 +3,7 @@
 
 2. Update database
 - tạo lệnh update: 
-	+ dotnet ef migrations add UpdateModel_v1 --project NetCore_Learning.Data --startup-project NetCore_Learning.API
+	+ dotnet ef migrations add UpdateModel_v2 --project NetCore_Learning.Data --startup-project NetCore_Learning.API
 - run lệnh update:
 	+ dotnet ef database update --project NetCore_Learning.Data --startup-project NetCore_Learning.API
 

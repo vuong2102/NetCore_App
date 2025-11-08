@@ -6,7 +6,8 @@ namespace NetCore_Learning.Application.Services.Interface
 {
     public interface IAccountService
     {
-        Task<ResponseResult<string>> LoginRequestAsync(AccountDto account);
+        Task<ResponseResult<TokenResponseDto>> LoginRequestAsync(AccountDto account);
         Task<ResponseResult<string>> RegisterAccountAsync(AccountDto account);
+        Task<ResponseResult<TokenResponseDto>> RefreshTokenAsync(TokenRequestDto tokenRequest);
     }
 }
