@@ -9,5 +9,7 @@ namespace NetCore_Learning.Application.Services.Interface
         Task<ResponseResult<TokenResponseDto>> LoginRequestAsync(AccountDto account);
         Task<ResponseResult<string>> RegisterAccountAsync(AccountDto account);
         Task<ResponseResult<TokenResponseDto>> RefreshTokenAsync(TokenRequestDto tokenRequest);
+        Task<ResponseResult<string>> LogOut(TokenRequestDto tokenRequest);
+        
     }
 }

@@ -27,6 +27,7 @@
     <ProjectReference Include="..\NetCore_Learning.Application\NetCore_Learning.Application.csproj" />
     <ProjectReference Include="..\NetCore_Learning.Data\NetCore_Learning.Data.csproj" />
     <ProjectReference Include="..\NetCore_Learning.Share\NetCore_Learning.Share.csproj" />
+    <ProjectReference Include="..\NetCore_Learning.Infrastructure\NetCore_Learning.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

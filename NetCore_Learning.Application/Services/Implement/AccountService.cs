@@ -1,13 +1,11 @@
 ﻿using MapsterMapper;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using NetCore_Learning.Application.Models.DTO;
 using NetCore_Learning.Application.Services.Interface;
 using NetCore_Learning.Data.Configuration;
-using NetCore_Learning.Data.Core;
 using NetCore_Learning.Data.Core.YourApp.Core.Interfaces;
 using NetCore_Learning.Data.Models;
 using NetCore_Learning.Data.Repositories.Interface;
@@ -15,18 +13,37 @@ using NetCore_Learning.Share.Common;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
+using Net_Learning.Models.Models;
+using NetCore_Learning.Infrastructure.Services.Caching;
+using Newtonsoft.Json;
+using Microsoft.AspNetCore.Http;
 
 namespace NetCore_Learning.Application.Services.Implement
 {
-    public class AccountService(
-        ApplicationDbContext context,
-        IMapper _mapper,
-        IUnitOfWork _unitOfWork,
-        IConfiguration _configuration,
-        IUserAccountRepository _userAccountRepository
-        ) : IAccountService
+    public class AccountService : BaseService, IAccountService
     {
-        readonly ApplicationDbContext  _context = context;
+        private readonly ApplicationDbContext _context;
+        private readonly IMapper _mapper;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly IUserAccountRepository _userAccountRepository;
+        private readonly IRedisCacheService _redisCacheService;
+
+        public AccountService(
+            ApplicationDbContext context,
+            IMapper mapper,
+            IUnitOfWork unitOfWork,
+            IConfiguration configuration,
+            IHttpContextAccessor httpContextAccessor,
+            IUserAccountRepository userAccountRepository,
+            IRedisCacheService redisCacheService) : base(configuration, httpContextAccessor)
+        {
+            _context = context;
+            _mapper = mapper;
+            _unitOfWork = unitOfWork;
+            _userAccountRepository = userAccountRepository;
+            _redisCacheService = redisCacheService;
+        }
 
         public async Task<ResponseResult<TokenResponseDto>> LoginRequestAsync(AccountDto account)
         {
@@ -53,7 +70,8 @@ namespace NetCore_Learning.Application.Services.Implement
                     throw new UnauthorizedAccessException("Mật khẩu không chính xác");
 
                 // Create token response
-                var tokenResponse = await CreateTokenResponseAsync(userAccount);
+                var headerInfo = GetHeaderInfo();
+                var tokenResponse = await CreateTokenResponseAsync(userAccount, headerInfo);
                 return new ResponseResult<TokenResponseDto>(tokenResponse, ResultCode.SuccessResult);
             }
             catch (UnauthorizedAccessException ex)
@@ -78,16 +96,16 @@ namespace NetCore_Learning.Application.Services.Implement
             };
 
             //Signature
-            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(_configuration["JWT:SecretKey"]));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration["JWT:SecretKey"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512); //Header
 
             var tokenDescriptor = new JwtSecurityToken(
-                issuer: _configuration["JWT:ValidIssuer"],
-                audience: _configuration["JWT:ValidAudience"],
+                issuer: Configuration["JWT:ValidIssuer"],
+                audience: Configuration["JWT:ValidAudience"],
                 claims: claims,
-                expires: DateTime.Now.AddHours(2),
+                expires: DateTime.Now.AddMinutes(double.Parse(Configuration["JWT:TokenvalidityInMinutes"])),
                 signingCredentials: creds
-                );
+            );
             return new JwtSecurityTokenHandler().WriteToken(tokenDescriptor);
         }
 
@@ -99,30 +117,39 @@ namespace NetCore_Learning.Application.Services.Implement
             return Convert.ToBase64String(randomNumber);
         }
 
-        private async Task<string> GenerateAndSaveRefreshTokenAsync(UserAccount userAccount)
-        {
-            var refreshToken = GenerateRefreshToken();
-            userAccount.RefreshToken = refreshToken;
-            userAccount.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
-            await _context.SaveChangesAsync();
-            return refreshToken;
-        }
-
         public async Task<ResponseResult<TokenResponseDto>> RefreshTokenAsync(TokenRequestDto tokenRequest)
         {
             try
             {
-                var user = await ValidateRefreshTokenAsync(tokenRequest.UserId, tokenRequest.RefreshToken);
-                if (user == null)
-                {
-                    return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "Invalid refresh token or user ID");
-                }
-                var userAccount = await _context.UserAccounts.FirstOrDefaultAsync(ua => ua.UserId == user.Id);
+                // Parse expired token
+                var principal = GetUserPrincipal(tokenRequest.Token);
+                var userId = principal?.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                if (userId == null)
+                    return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "Invalid token");
+
+                var headerInfo = GetHeaderInfo();
+
+                // Lấy session Redis
+                var redisKey = $"{RedisCachingOptionsEnum.Token}_{userId}_{RedisCachingOptionsEnum.Device}_{headerInfo.DeviceId}";
+                var data = await _redisCacheService.GetDataAsync<byte[]>(redisKey);
+                if (data == null)
+                    return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "Session not found or expired");
+
+                var session = JsonConvert.DeserializeObject<UserSessions>(Encoding.UTF8.GetString(data))!;
+
+                // Validate refresh token
+                if (session.RefreshToken != tokenRequest.RefreshToken)
+                    return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "Invalid refresh token");
+                if (session.IsRevoke || session.ExpiredAt < DateTime.UtcNow)
+                    return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "Refresh token revoked or expired");
+
+
+                var userAccount = await _context.UserAccounts.FirstOrDefaultAsync(ua => ua.UserId == userId);
                 if (userAccount == null)
                 {
                     return new ResponseResult<TokenResponseDto>(null, ResultCode.InvalidDataResult, "User account not found");
                 }
-                var tokenResponse = await CreateTokenResponseAsync(userAccount);
+                var tokenResponse = await CreateTokenResponseAsync(userAccount, headerInfo);
                 return new ResponseResult<TokenResponseDto>(tokenResponse, ResultCode.SuccessResult);
             }
             catch (Exception ex)
@@ -131,28 +158,34 @@ namespace NetCore_Learning.Application.Services.Implement
             }
         }
 
-        public async Task<TokenResponseDto> CreateTokenResponseAsync(UserAccount userAccount)
+        public async Task<TokenResponseDto> CreateTokenResponseAsync(UserAccount userAccount, HeaderInfo headerInfo, bool isRefreshToken = false)
         {
             var newAccessToken = CreateJwtToken(userAccount);
-            var newRefreshToken = await GenerateAndSaveRefreshTokenAsync(userAccount);
+            var newRefreshToken = isRefreshToken ? GenerateRefreshToken() : userAccount.RefreshToken;
+
+            // Save to Caching
+            var userSessionCachingKey = $"{RedisCachingOptionsEnum.Token.ToString()}_{userAccount.UserId}_{RedisCachingOptionsEnum.Device.ToString()}_{headerInfo.DeviceId}";
+            // Set data to Caching
+            var userSessions = new UserSessions()
+            {
+                UserId = userAccount.UserId,
+                Token = newAccessToken,
+                RefreshToken = newRefreshToken,
+                CreatedAt = DateTime.UtcNow,
+                ExpiredAt = DateTime.UtcNow.AddDays(int.Parse(Configuration["JWT:RefreshTokenValidityInDays"])),
+                IsRevoke = false,
+                HeaderInfo = headerInfo
+            };
+            var dataCacheJson = JsonConvert.SerializeObject(userSessions);
+            var dataToCache = Encoding.UTF8.GetBytes(dataCacheJson);
+            await _redisCacheService.SetDataAsync(userSessionCachingKey, dataToCache, (int.Parse(Configuration["JWT:RefreshTokenValidityInDays"]) * 24 * 60));
+            
             var response = new TokenResponseDto
             {
                 AccessToken = newAccessToken,
                 RefreshToken = newRefreshToken
             };
             return response;
-        }
-
-        private async Task<User?> ValidateRefreshTokenAsync(string userId, string refreshToken)
-        {
-            var userAccount = await _context.UserAccounts
-                .Include(ua => ua.User)
-                .FirstOrDefaultAsync(ua => ua.UserId == userId && ua.RefreshToken == refreshToken);
-            if (userAccount == null || userAccount.RefreshTokenExpiryTime <= DateTime.UtcNow)
-            {
-                return null;
-            }
-            return userAccount.User;
         }
 
         public async Task<ResponseResult<string>> RegisterAccountAsync(AccountDto account)
@@ -190,6 +223,27 @@ namespace NetCore_Learning.Application.Services.Implement
                 await _unitOfWork.RollbackTransactionAsync();
                 return new ResponseResult<string>($"Register failed: {ex.Message}", ResultCode.ExceptionResult);
             }
+        }
+        
+        public async Task<ResponseResult<string>> LogOut(TokenRequestDto tokenRequest)
+        {
+            var principal = GetUserPrincipal(tokenRequest.Token);
+            var userId = principal?.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null)
+                return new ResponseResult<string>(null, ResultCode.InvalidDataResult, "Invalid token");
+
+            var headerInfo = GetHeaderInfo();
+
+
+            var userAccount = await _context.UserAccounts.FirstOrDefaultAsync(ua => ua.UserId == userId);
+            if (userAccount == null)
+            {
+                return new ResponseResult<string>(null, ResultCode.InvalidDataResult, "User account not found");
+            }
+            // Xóa session trong Redis (blacklist token cho device này)
+            var redisKey = $"{RedisCachingOptionsEnum.Token}_{userAccount.UserId}_{RedisCachingOptionsEnum.Device}_{headerInfo.DeviceId}";
+            await _redisCacheService.RemoveDataAsync(redisKey);
+            return new ResponseResult<string>("", ResultCode.SuccessResult);
         }
     }
 }

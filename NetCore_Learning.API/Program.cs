@@ -13,6 +13,9 @@ using NetCore_Learning.Data.Configuration;
 using NetCore_Learning.Data.Core;
 using NetCore_Learning.Data.Core.YourApp.Core.Interfaces;
 using NetCore_Learning.Data.Helper;
+using NetCore_Learning.Infrastructure;
+using NetCore_Learning.Infrastructure.Services.Caching;
+using NetCore_Learning.API.Middleware;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -50,8 +53,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 
 //
 builder.Services.AddRepository();
+builder.Services.AddInfrastructure(configuration);
 builder.Services.AddControllers();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IRedisCacheService, RedisCacheService>();
 builder.Services.AddScoped<ILifeTimeOfDependencyService, LifeTimeOfDependencyService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddApiVersioningService();
@@ -90,6 +95,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 app.UseAuthentication();
+app.UseRequestHeaderValidation(); // Validate request header
 app.UseAuthorization();
 app.MapDefaultControllerRoute();
 app.MapControllers();

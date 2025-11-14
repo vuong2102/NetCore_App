@@ -17,4 +17,14 @@ namespace NetCore_Learning.Share.Common
         Inactive = 0,
         Active = 1
     }
+    
+    public enum RedisCachingOptionsEnum
+    {
+        [Display(Name = "Redis")]
+        None = 0,
+        [Display(Name = "Token")]
+        Token = 1,
+        [Display(Name = "Device")]
+        Device = 2
+    }
 }
