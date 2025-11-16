@@ -25,6 +25,8 @@ namespace NetCore_Learning.Share.Common
         [Display(Name = "Token")]
         Token = 1,
         [Display(Name = "Device")]
-        Device = 2
+        Device = 2,
+        [Display(Name = "Blacklist")]
+        BlacklistToken = 3
     }
 }

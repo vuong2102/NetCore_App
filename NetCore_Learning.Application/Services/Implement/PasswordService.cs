@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using NetCore_Learning.Application.Services.Interface;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,11 +8,7 @@ using System.Threading.Tasks;
 
 namespace NetCore_Learning.Application.Services.Implement
 {
-    public interface IPasswordService
-    {
-        string HashPassword(string password);
-        bool VerifyPassword(string hashedPassword, string password);
-    }
+    
     public class PasswordService : IPasswordService
     {
         private readonly PasswordHasher<object> _hasher = new();

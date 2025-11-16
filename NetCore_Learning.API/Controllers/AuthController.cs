@@ -36,7 +36,7 @@ namespace Net_Learning.Controllers
         }
 
         [HttpPost("refresh-token")]
-        public async Task<ResponseResult<TokenResponseDto>> RefreshToken(TokenRequestDto request)
+        public async Task<ResponseResult<TokenResponseDto>> RefreshToken(TokenRefreshRequestDto request)
         {
             try
             {
@@ -98,6 +98,24 @@ namespace Net_Learning.Controllers
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
 
+        }
+
+        /// <summary>
+        /// Hủy tất cả tokens của một user (tất cả devices)
+        /// </summary>
+        [HttpPost("revoke-all-tokens/{userId}")]
+        [Authorize]
+        public async Task<ResponseResult<string>> RevokeAllUserTokens(string userId)
+        {
+            try
+            {
+                var result = await accountService.RevokeAllUserTokensAsync(userId);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                return new InvalidDataResponseResult<string>(ex.Message);
+            }
         }
     }
 }

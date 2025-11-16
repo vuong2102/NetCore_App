@@ -21,22 +21,31 @@ public class RequestHeaderValidationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var endpoint = context.GetEndpoint();
-        var allowAnonymous = endpoint?.Metadata?.GetMetadata<IAllowAnonymous>() != null;
-
-        // Bỏ qua nếu có [AllowAnonymous]
-        if (allowAnonymous)
+        // Step 1: Skip validation for paths that don't need headers (Swagger, OpenAPI, health checks, etc.)
+        var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+        if (ShouldSkipValidation(path))
         {
             await _next(context);
             return;
         }
 
-        // Các header FE gửi lên
+        // Step 2: Get the routed endpoint
+        var endpoint = context.GetEndpoint();
+        
+        // Step 3: Skip validation only if endpoint is not resolved (request doesn't match any route → will return 404)
+        // Note: Even endpoints with [AllowAnonymous] need headers (e.g., login/register need DeviceId to save session)
+        if (endpoint == null)
+        {
+            await _next(context);
+            return;
+        }
+
+        // Step 4: Validate headers for all endpoints (including [AllowAnonymous] endpoints like login/register)
+        // Headers are needed to save session information (DeviceId, UserAgent, IpAddress)
         var deviceId = context.Request.Headers["X-Device-Id"].ToString();
         var userAgent = context.Request.Headers["X-User-Agent"].ToString();
         var ipAddress = context.Request.Headers["X-IP-Address"].ToString();
 
-        // Kiểm tra thiếu header nào
         var missingHeaders = new List<string>();
         if (string.IsNullOrWhiteSpace(deviceId)) missingHeaders.Add("X-Device-Id");
         if (string.IsNullOrWhiteSpace(userAgent)) missingHeaders.Add("X-User-Agent");
@@ -44,7 +53,7 @@ public class RequestHeaderValidationMiddleware
 
         if (missingHeaders.Any())
         {
-            var msg = $"Missing some informations in header: {string.Join(", ", missingHeaders)}";
+            var msg = $"Missing required headers: {string.Join(", ", missingHeaders)}";
             _logger.LogWarning(msg);
 
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -57,12 +66,32 @@ public class RequestHeaderValidationMiddleware
             return;
         }
 
-        // Lưu vào HttpContext.Items để dùng ở tầng dưới
+        // Step 5: Store headers in HttpContext.Items for use in service layer
         context.Items["DeviceId"] = deviceId;
         context.Items["UserAgent"] = userAgent;
         context.Items["IpAddress"] = ipAddress;
 
         await _next(context);
+    }
+
+    /// <summary>
+    /// Check if the path should skip validation
+    /// </summary>
+    private static bool ShouldSkipValidation(string path)
+    {
+        // Skip paths that don't need headers
+        var skipPaths = new[]
+        {
+            "/swagger",
+            "/openapi",
+            "/scalar",
+            "/health",
+            "/favicon.ico",
+            "/_vs",
+            "/.well-known"
+        };
+
+        return skipPaths.Any(skipPath => path.StartsWith(skipPath, StringComparison.OrdinalIgnoreCase));
     }
 }
 

@@ -8,8 +8,12 @@ namespace NetCore_Learning.Application.Services.Interface
     {
         Task<ResponseResult<TokenResponseDto>> LoginRequestAsync(AccountDto account);
         Task<ResponseResult<string>> RegisterAccountAsync(AccountDto account);
-        Task<ResponseResult<TokenResponseDto>> RefreshTokenAsync(TokenRequestDto tokenRequest);
+        Task<ResponseResult<TokenResponseDto>> RefreshTokenAsync(TokenRefreshRequestDto tokenRequest);
         Task<ResponseResult<string>> LogOut(TokenRequestDto tokenRequest);
         
+        /// <summary>
+        /// Hủy tất cả tokens của một user (tất cả devices)
+        /// </summary>
+        Task<ResponseResult<string>> RevokeAllUserTokensAsync(string userId);
     }
 }

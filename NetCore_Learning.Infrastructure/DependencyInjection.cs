@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace NetCore_Learning.Infrastructure;
 
@@ -13,6 +14,7 @@ public static class DependencyInjection
 
         if (!string.IsNullOrWhiteSpace(redisConnection))
         {
+            // Register IDistributedCache
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnection;
@@ -20,6 +22,12 @@ public static class DependencyInjection
                 {
                     options.InstanceName = redisInstance;
                 }
+            });
+
+            // Register IConnectionMultiplexer để hỗ trợ pattern search
+            services.AddSingleton<IConnectionMultiplexer>(sp =>
+            {
+                return ConnectionMultiplexer.Connect(redisConnection);
             });
         }
 
